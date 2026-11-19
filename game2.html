@@ -1,0 +1,371 @@
+<a href="index.html">返回抽籤轉盤</a>
+
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <!-- 手機版最佳化設定，防止縮放跑版 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>露營分帳抽籤小工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #FAF6F0;
+            background-image: radial-gradient(#d4c3b3 1px, transparent 1px);
+            background-size: 20px 20px;
+            /* 適合手機瀏覽，避免水平捲動 */
+            overflow-x: hidden; 
+        }
+
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            max-width: 380px;
+            aspect-ratio: 1 / 1;
+            margin: 0 auto;
+            filter: drop-shadow(0 10px 15px rgba(0,0,0,0.15));
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            display: block;
+        }
+
+        /* 轉盤頂部的指針 */
+        .pointer {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-top: 35px solid #E63946;
+            z-index: 10;
+            filter: drop-shadow(0 4px 4px rgba(0,0,0,0.3));
+        }
+
+        /* 彈出動畫 */
+        @keyframes popIn {
+            0% { transform: scale(0.8); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .modal-animate {
+            animation: popIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        .modal-overlay {
+            background-color: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+        }
+
+        .btn-spin {
+            transition: all 0.15s ease;
+            box-shadow: 0 6px 0 #3a4f21;
+            touch-action: manipulation; /* 防止手機雙擊縮放 */
+        }
+        .btn-spin:active:not(:disabled) {
+            transform: translateY(6px);
+            box-shadow: 0 0px 0 #3a4f21;
+        }
+        .btn-spin:disabled {
+            background-color: #9ca3af;
+            box-shadow: 0 6px 0 #6b7280;
+            cursor: not-allowed;
+            transform: none;
+        }
+    </style>
+</head>
+<body class="text-gray-800 min-h-screen flex flex-col">
+
+    <!-- 頂部標題 -->
+    <header class="bg-[#4A5D23] text-[#FAF6F0] py-4 shadow-md border-b-4 border-[#3a4f21]">
+        <div class="container mx-auto px-4 text-center">
+            <h1 class="text-2xl md:text-3xl font-black tracking-wider flex justify-center items-center gap-2">
+                🏕️ 露營分帳抽籤 🏕️
+            </h1>
+        </div>
+    </header>
+
+    <!-- 主要內容區 -->
+    <main class="flex-grow container mx-auto px-4 py-6 max-w-5xl flex flex-col lg:flex-row items-center justify-center gap-8">
+        
+        <!-- 轉盤區 -->
+        <div class="w-full max-w-md bg-white rounded-3xl shadow-xl p-5 md:p-8 border border-[#e5dfd5] relative flex-shrink-0">
+            <div class="canvas-container" id="wheelWrapper">
+                <div class="pointer"></div>
+                <canvas id="wheelCanvas"></canvas>
+            </div>
+
+            <div class="mt-8 text-center">
+                <button id="spinBtn" class="btn-spin bg-[#5A722C] hover:bg-[#6a8733] text-white text-xl md:text-2xl font-bold py-4 px-10 rounded-full w-full tracking-widest uppercase">
+                    開始抽籤 !
+                </button>
+            </div>
+        </div>
+
+        <!-- 紀錄區 -->
+        <div class="w-full max-w-md flex flex-col gap-5">
+            <!-- 帳篷A -->
+            <div class="bg-white rounded-2xl shadow-lg p-5 border-l-8 border-[#7B9E77]">
+                <h2 class="text-2xl font-black text-[#4A5D23] mb-3 flex items-center gap-3">
+                    <span class="bg-[#7B9E77] text-white rounded-full w-8 h-8 flex items-center justify-center text-lg">A</span>
+                    帳篷 A
+                </h2>
+                <div class="bg-[#F2F6F1] p-4 rounded-xl border border-[#c3d3c0]">
+                    <div class="text-gray-500 font-bold mb-1 text-xs">固定班底</div>
+                    <div class="text-xl font-bold text-[#3a4f21] mb-2">9+鈺</div>
+                    <div class="w-full h-px bg-[#c3d3c0] mb-2"></div>
+                    <div class="text-gray-500 font-bold mb-1 text-xs">新入住</div>
+                    <div id="tentA-slot" class="text-lg font-bold text-[#D4A373] transition-all duration-300 min-h-[28px]">等待抽籤...</div>
+                </div>
+            </div>
+
+            <!-- 帳篷B -->
+            <div class="bg-white rounded-2xl shadow-lg p-5 border-l-8 border-[#D4A373]">
+                <h2 class="text-2xl font-black text-[#8b6139] mb-3 flex items-center gap-3">
+                    <span class="bg-[#D4A373] text-white rounded-full w-8 h-8 flex items-center justify-center text-lg">B</span>
+                    帳篷 B
+                </h2>
+                <div class="bg-[#FDF9F3] p-4 rounded-xl border border-[#e8d7c5]">
+                    <div class="text-gray-500 font-bold mb-1 text-xs">固定班底</div>
+                    <div class="text-xl font-bold text-[#8b6139] mb-2">維+A</div>
+                    <div class="w-full h-px bg-[#e8d7c5] mb-2"></div>
+                    <div class="text-gray-500 font-bold mb-1 text-xs">新入住</div>
+                    <div id="tentB-slot" class="text-lg font-bold text-[#7B9E77] transition-all duration-300 min-h-[28px]">等待抽籤...</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 自訂 Modal 彈跳視窗 -->
+    <div id="customModal" class="fixed inset-0 z-50 hidden items-center justify-center modal-overlay px-4">
+        <div class="bg-white rounded-3xl p-6 md:p-8 max-w-sm w-full shadow-2xl modal-animate text-center border-t-8 border-[#4A5D23]">
+            <h3 class="text-2xl md:text-3xl font-black text-[#4A5D23] mb-4">🏕️ 抽籤結果</h3>
+            <div id="modalText" class="text-xl md:text-2xl text-gray-800 mb-6 font-bold leading-snug"></div>
+            <button onclick="closeModal()" class="bg-[#D4A373] hover:bg-[#c49262] text-white text-lg font-bold py-3 px-8 rounded-full shadow-md transition-all w-full active:scale-95">
+                確認
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // 嚴格依照要求設置的 12 格選項陣列 (完美穿插，無記憶隨機)
+        // 6格直接入住 (進A、進B)，6格猜拳條件
+        const slices = [
+            { text: '修\n(進A帳)', color: '#EED7A1', tentA: '修', tentB: '葵+K', msg: '恭喜修承入住 A 帳！' },
+            { text: '葵+K\n(猜拳贏A)', color: '#7B9E77', tentA: '等待猜拳...', tentB: '等待猜拳...', msg: '葵+K觸發猜拳！<br>贏的去 A 帳，輸的去 B 帳！' },
+            { text: '修承\n(猜拳贏B)', color: '#D4A373', tentA: '等待猜拳...', tentB: '等待猜拳...', msg: '修觸發猜拳！<br>贏的去 B 帳，輸的去 A 帳！' },
+            { text: '葵+K\n(進B帳)', color: '#A8C3A6', tentA: '修', tentB: '葵+K', msg: '葵+K去 B 帳，修入住 A 帳！' },
+            { text: '修\n(進B帳)', color: '#EED7A1', tentA: '葵+K', tentB: '修', msg: '修去 B 帳，葵+K入住 A 帳！' },
+            { text: '葵+K\n(猜拳贏A)', color: '#7B9E77', tentA: '等待猜拳...', tentB: '等待猜拳...', msg: '葵+K觸發猜拳！<br>贏的去 A 帳，輸的去 B 帳！' },
+            { text: '修\n(猜拳贏A)', color: '#D4A373', tentA: '等待猜拳...', tentB: '等待猜拳...', msg: '修觸發猜拳！<br>贏的去 A 帳，輸的去 B 帳！' },
+            { text: '葵+K\n(進A帳)', color: '#A8C3A6', tentA: '葵+K', tentB: '修', msg: '恭喜葵+K入住 A 帳！' },
+            { text: '修\n(進A帳)', color: '#EED7A1', tentA: '修', tentB: '葵+K', msg: '恭喜修入住 A 帳！' },
+            { text: '葵+K\n(猜拳贏B)', color: '#7B9E77', tentA: '等待猜拳...', tentB: '等待猜拳...', msg: '葵+K觸發猜拳！<br>贏的去 B 帳，輸的去 A 帳！' },
+            { text: '修\n(猜拳贏B)', color: '#D4A373', tentA: '等待猜拳...', tentB: '等待猜拳...', msg: '修觸發猜拳！<br>贏的去 B 帳，輸的去 A 帳！' },
+            { text: '葵+K\n(進B帳)', color: '#A8C3A6', tentA: '修', tentB: '葵+K', msg: '葵+K去 B 帳，修入住 A 帳！' }
+        ];
+        
+        const canvas = document.getElementById('wheelCanvas');
+        const ctx = canvas.getContext('2d');
+        const spinBtn = document.getElementById('spinBtn');
+        const wrapper = document.getElementById('wheelWrapper');
+        
+        let currentAngle = 0;
+        let spinVelocity = 0;
+        let isSpinning = false;
+        let animationFrame;
+
+        // 高解析度螢幕 (手機 Retina) 優化，確保畫面不模糊
+        function resizeCanvas() {
+            const size = wrapper.clientWidth;
+            // 取得裝置像素比例
+            const scale = window.devicePixelRatio || 1;
+            
+            // 放大 canvas 實際像素
+            canvas.width = size * scale;
+            canvas.height = size * scale;
+            
+            // 縮放繪圖環境，讓後續座標可以直接用 CSS 大小計算
+            ctx.scale(scale, scale);
+            
+            drawWheel(size);
+        }
+
+        // 繪製轉盤 (傳入 CSS 尺寸)
+        function drawWheel(size) {
+            // 清除畫布，注意我們已經 scale 過了，所以用 size 計算即可
+            ctx.clearRect(0, 0, size, size);
+            
+            const centerX = size / 2;
+            const centerY = size / 2;
+            const radius = Math.min(centerX, centerY) - (size * 0.05); // 留邊距
+
+            const sliceAngle = (Math.PI * 2) / slices.length;
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.rotate(currentAngle);
+
+            for (let i = 0; i < slices.length; i++) {
+                const slice = slices[i];
+
+                // 畫扇形
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.arc(0, 0, radius, i * sliceAngle, (i + 1) * sliceAngle);
+                ctx.fillStyle = slice.color;
+                ctx.fill();
+                
+                // 加邊框
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = "#ffffff";
+                ctx.stroke();
+
+                // 畫文字
+                ctx.save();
+                const textAngle = i * sliceAngle + sliceAngle / 2;
+                ctx.rotate(textAngle);
+                ctx.translate(radius * 0.6, 0); 
+                
+                const isDark = slice.color === '#7B9E77' || slice.color === '#D4A373';
+                ctx.fillStyle = isDark ? "#ffffff" : "#3F301D";
+                
+                if (isDark) {
+                    ctx.shadowColor = "rgba(0,0,0,0.3)";
+                    ctx.shadowBlur = 4;
+                    ctx.shadowOffsetX = 1;
+                    ctx.shadowOffsetY = 1;
+                }
+
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                
+                // 根據畫面大小動態調整字體
+                const mainFontSize = size * 0.045;
+                const subFontSize = size * 0.035;
+
+                const lines = slice.text.split('\n');
+                const lineHeight = size * 0.055;
+                const startY = -((lines.length - 1) * lineHeight) / 2;
+                
+                for (let j = 0; j < lines.length; j++) {
+                    if (j === 0) {
+                        ctx.font = `900 ${mainFontSize}px 'Noto Sans TC', sans-serif`;
+                    } else {
+                        ctx.font = `700 ${subFontSize}px 'Noto Sans TC', sans-serif`;
+                        if(!isDark) ctx.fillStyle = "#6B4C2A"; 
+                    }
+                    ctx.fillText(lines[j], 0, startY + (j * lineHeight));
+                }
+                ctx.restore();
+            }
+
+            // 中心點裝飾
+            ctx.beginPath();
+            ctx.arc(0, 0, size * 0.12, 0, Math.PI * 2);
+            ctx.fillStyle = "#ffffff";
+            ctx.fill();
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = "#4A5D23";
+            ctx.stroke();
+            
+            ctx.fillStyle = "#4A5D23";
+            ctx.font = `900 ${size * 0.04}px 'Noto Sans TC', sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("CAMP", 0, 0);
+
+            ctx.restore();
+        }
+
+        // 開始旋轉
+        spinBtn.addEventListener('click', () => {
+            if (isSpinning) return;
+            
+            isSpinning = true;
+            spinBtn.disabled = true;
+            spinBtn.innerText = "轉動中...";
+            
+            // 確保手機瀏覽時捲動到上方看得到轉盤
+            wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            
+            // 隨機初始速度，確保不規律
+            spinVelocity = Math.random() * 0.2 + 0.45; 
+            
+            animateSpin();
+        });
+
+        function animateSpin() {
+            currentAngle += spinVelocity;
+            spinVelocity *= 0.982; // 減速阻力
+            
+            drawWheel(wrapper.clientWidth);
+            
+            if (spinVelocity < 0.002) {
+                isSpinning = false;
+                spinBtn.disabled = false;
+                spinBtn.innerText = "開始抽籤 !";
+                cancelAnimationFrame(animationFrame);
+                calculateWinner();
+                return;
+            }
+            
+            animationFrame = requestAnimationFrame(animateSpin);
+        }
+
+        function calculateWinner() {
+            const sliceAngle = (Math.PI * 2) / slices.length;
+            const normalizedAngle = currentAngle % (Math.PI * 2);
+            const pointerAngle = 3 * Math.PI / 2;
+            
+            let relativePointer = (pointerAngle - normalizedAngle + Math.PI * 2) % (Math.PI * 2);
+            const currentWinnerIndex = Math.floor(relativePointer / sliceAngle);
+            
+            const winnerData = slices[currentWinnerIndex];
+            
+            const modal = document.getElementById('customModal');
+            const modalText = document.getElementById('modalText');
+            
+            modalText.innerHTML = winnerData.msg;
+
+            const tentA = document.getElementById('tentA-slot');
+            const tentB = document.getElementById('tentB-slot');
+            
+            tentA.innerText = winnerData.tentA;
+            tentB.innerText = winnerData.tentB;
+            
+            if(winnerData.tentA.includes("猜拳")) {
+                tentA.classList.add("animate-pulse", "text-[#E63946]");
+                tentB.classList.add("animate-pulse", "text-[#E63946]");
+            } else {
+                tentA.classList.remove("animate-pulse", "text-[#E63946]");
+                tentB.classList.remove("animate-pulse", "text-[#E63946]");
+                tentA.classList.add("text-[#D4A373]");
+                tentB.classList.add("text-[#7B9E77]");
+            }
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('customModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        // 初始化與響應式重繪
+        window.addEventListener('resize', resizeCanvas);
+        window.onload = resizeCanvas;
+
+    </script>
+</body>
+</html>
